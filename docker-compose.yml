@@ -1,0 +1,27 @@
+services:
+  ros:
+    build:
+      context: ./docker
+      args:
+        UID: 1000
+        GID: 1000
+    image: pick_place:humble
+    container_name: pick_place
+    network_mode: host          # ROS 2 DDS discovery
+    ipc: host
+    group_add:
+      - "44"    # video  (host GID)
+      - "110"   # render (host GID) -> Iris Xe GPU access
+    devices:
+      - /dev/dri:/dev/dri
+    environment:
+      - DISPLAY=${DISPLAY:-:0}
+      - QT_X11_NO_MITSHM=1
+      - ROS_DOMAIN_ID=42        # isolate from the host's own ROS 2 install
+      - IGN_GAZEBO_SYSTEM_PLUGIN_PATH=/opt/ros/humble/lib
+      - IGN_IP=127.0.0.1        # keep Gazebo transport on loopback (a VPN interface dropped messages)
+    volumes:
+      - ./:/ws
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+    stdin_open: true
+    tty: true

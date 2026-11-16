@@ -1,0 +1,200 @@
+<?xml version="1.0"?>
+<!--
+  6-DOF pick-and-place arm (spherical wrist) + parallel-jaw gripper.
+  Mounted on a pedestal beside the conveyor at world (0, -0.55).
+
+  Kinematic chain:  world -> pedestal -> base_link -j1(yaw)-> link1 -j2(pitch)-> link2
+                    -j3(pitch)-> link3 -j4(roll)-> link4 -j5(pitch)-> link5 -j6(roll)-> link6
+                    -> gripper_base -> tcp            (+ finger_left / finger_right prismatic)
+  All joints zero = arm pointing straight up.
+-->
+<robot name="arm" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:arg name="controllers_file" default=""/>
+  <xacro:arg name="attach_slots" default="6"/>
+
+  <xacro:property name="PI" value="3.14159265"/>
+  <xacro:property name="slots" value="$(arg attach_slots)"/>
+  <xacro:property name="pedestal_h" value="0.60"/>
+  <xacro:property name="L1" value="0.15"/>   <!-- base_link -> j2 -->
+  <xacro:property name="L2" value="0.40"/>   <!-- upper arm j2 -> j3 -->
+  <xacro:property name="L3" value="0.20"/>   <!-- j3 -> j4 -->
+  <xacro:property name="L4" value="0.20"/>   <!-- j4 -> j5 -->
+  <xacro:property name="L5" value="0.08"/>   <!-- j5 -> j6 / flange -->
+
+  <!-- ===== helpers ===== -->
+  <xacro:macro name="cyl_inertia" params="m r h">
+    <inertial>
+      <origin xyz="0 0 ${h/2}"/>
+      <mass value="${m}"/>
+      <inertia ixx="${m*(3*r*r+h*h)/12}" iyy="${m*(3*r*r+h*h)/12}" izz="${m*r*r/2}" ixy="0" ixz="0" iyz="0"/>
+    </inertial>
+  </xacro:macro>
+
+  <xacro:macro name="cyl_link" params="name r h m color">
+    <link name="${name}">
+      <visual>
+        <origin xyz="0 0 ${h/2}"/>
+        <geometry><cylinder radius="${r}" length="${h}"/></geometry>
+        <material name="${color}"/>
+      </visual>
+      <collision>
+        <origin xyz="0 0 ${h/2}"/>
+        <geometry><cylinder radius="${r}" length="${h}"/></geometry>
+      </collision>
+      <xacro:cyl_inertia m="${m}" r="${r}" h="${h}"/>
+    </link>
+  </xacro:macro>
+
+  <material name="steel"><color rgba="0.55 0.57 0.6 1"/></material>
+  <material name="blue"><color rgba="0.15 0.35 0.75 1"/></material>
+  <material name="dark"><color rgba="0.15 0.15 0.15 1"/></material>
+
+  <!-- ===== mounting ===== -->
+  <link name="world"/>
+  <joint name="world_to_pedestal" type="fixed">
+    <parent link="world"/><child link="pedestal"/>
+    <origin xyz="0 -0.55 0"/>
+  </joint>
+  <xacro:cyl_link name="pedestal" r="0.10" h="${pedestal_h}" m="20" color="dark"/>
+
+  <joint name="pedestal_to_base" type="fixed">
+    <parent link="pedestal"/><child link="base_link"/>
+    <origin xyz="0 0 ${pedestal_h}"/>
+  </joint>
+  <xacro:cyl_link name="base_link" r="0.08" h="0.05" m="3" color="steel"/>
+
+  <!-- ===== arm ===== -->
+  <joint name="joint1" type="revolute">
+    <parent link="base_link"/><child link="link1"/>
+    <origin xyz="0 0 0.05"/><axis xyz="0 0 1"/>
+    <limit lower="${-PI}" upper="${PI}" effort="300" velocity="1.5"/>
+    <dynamics damping="1.0"/>
+  </joint>
+  <xacro:cyl_link name="link1" r="0.06" h="${L1-0.05}" m="2.0" color="blue"/>
+
+  <joint name="joint2" type="revolute">
+    <parent link="link1"/><child link="link2"/>
+    <origin xyz="0 0 ${L1-0.05}"/><axis xyz="0 1 0"/>
+    <limit lower="-2.0" upper="2.0" effort="300" velocity="1.5"/>
+    <dynamics damping="1.0"/>
+  </joint>
+  <xacro:cyl_link name="link2" r="0.045" h="${L2}" m="1.5" color="steel"/>
+
+  <joint name="joint3" type="revolute">
+    <parent link="link2"/><child link="link3"/>
+    <origin xyz="0 0 ${L2}"/><axis xyz="0 1 0"/>
+    <limit lower="-2.6" upper="2.6" effort="200" velocity="1.5"/>
+    <dynamics damping="1.0"/>
+  </joint>
+  <xacro:cyl_link name="link3" r="0.04" h="${L3}" m="1.0" color="blue"/>
+
+  <joint name="joint4" type="revolute">
+    <parent link="link3"/><child link="link4"/>
+    <origin xyz="0 0 ${L3}"/><axis xyz="0 0 1"/>
+    <limit lower="${-PI}" upper="${PI}" effort="100" velocity="2.0"/>
+    <dynamics damping="0.5"/>
+  </joint>
+  <xacro:cyl_link name="link4" r="0.035" h="${L4}" m="0.7" color="steel"/>
+
+  <joint name="joint5" type="revolute">
+    <parent link="link4"/><child link="link5"/>
+    <origin xyz="0 0 ${L4}"/><axis xyz="0 1 0"/>
+    <limit lower="-2.6" upper="2.6" effort="100" velocity="2.0"/>
+    <dynamics damping="0.5"/>
+  </joint>
+  <xacro:cyl_link name="link5" r="0.03" h="${L5}" m="0.4" color="blue"/>
+
+  <joint name="joint6" type="revolute">
+    <parent link="link5"/><child link="link6"/>
+    <origin xyz="0 0 ${L5}"/><axis xyz="0 0 1"/>
+    <limit lower="${-PI}" upper="${PI}" effort="50" velocity="2.5"/>
+    <dynamics damping="0.3"/>
+  </joint>
+  <xacro:cyl_link name="link6" r="0.03" h="0.02" m="0.2" color="steel"/>
+
+  <!-- ===== gripper (fingers close along the tool Y axis) ===== -->
+  <joint name="link6_to_gripper" type="fixed">
+    <parent link="link6"/><child link="gripper_base"/>
+    <origin xyz="0 0 0.02"/>
+  </joint>
+  <link name="gripper_base">
+    <visual><origin xyz="0 0 0.02"/><geometry><box size="0.06 0.22 0.04"/></geometry><material name="dark"/></visual>
+    <collision><origin xyz="0 0 0.02"/><geometry><box size="0.06 0.22 0.04"/></geometry></collision>
+    <inertial><origin xyz="0 0 0.02"/><mass value="0.3"/><inertia ixx="0.0013" iyy="0.0001" izz="0.0013" ixy="0" ixz="0" iyz="0"/></inertial>
+  </link>
+
+  <!-- finger joint value q = distance from tool axis to the finger's inner face -->
+  <xacro:macro name="finger" params="side sign">
+    <joint name="finger_${side}_joint" type="prismatic">
+      <parent link="gripper_base"/><child link="finger_${side}"/>
+      <origin xyz="0 0 0.04"/><axis xyz="0 ${sign} 0"/>
+      <limit lower="0.0" upper="0.085" effort="100" velocity="0.2"/>
+      <dynamics damping="2.0"/>
+    </joint>
+    <link name="finger_${side}">
+      <visual><origin xyz="0 ${sign*0.01} 0.05"/><geometry><box size="0.04 0.02 0.10"/></geometry><material name="steel"/></visual>
+      <collision><origin xyz="0 ${sign*0.01} 0.05"/><geometry><box size="0.04 0.02 0.10"/></geometry></collision>
+      <inertial><origin xyz="0 ${sign*0.01} 0.05"/><mass value="0.05"/><inertia ixx="0.00004" iyy="0.00004" izz="0.00001" ixy="0" ixz="0" iyz="0"/></inertial>
+    </link>
+  </xacro:macro>
+  <xacro:finger side="left" sign="1"/>
+  <xacro:finger side="right" sign="-1"/>
+
+  <!-- Tool Center Point: between the fingertips' mid-height. Z points out of the gripper. -->
+  <joint name="gripper_to_tcp" type="fixed">
+    <parent link="gripper_base"/><child link="tcp"/>
+    <origin xyz="0 0 0.11"/>
+  </joint>
+  <link name="tcp"/>
+
+  <!-- ===== ros2_control ===== -->
+  <ros2_control name="ArmSystem" type="system">
+    <hardware><plugin>gz_ros2_control/GazeboSimSystem</plugin></hardware>
+    <xacro:macro name="ctrl_joint" params="name init">
+      <joint name="${name}">
+        <command_interface name="position"/>
+        <state_interface name="position"><param name="initial_value">${init}</param></state_interface>
+        <state_interface name="velocity"/>
+      </joint>
+    </xacro:macro>
+    <!-- initial pose = "home" (tool pointing down, arm clear of camera view) -->
+    <xacro:ctrl_joint name="joint1" init="2.07"/>
+    <xacro:ctrl_joint name="joint2" init="-0.2"/>
+    <xacro:ctrl_joint name="joint3" init="1.6"/>
+    <xacro:ctrl_joint name="joint4" init="0.0"/>
+    <xacro:ctrl_joint name="joint5" init="1.74"/>
+    <xacro:ctrl_joint name="joint6" init="0.0"/>
+    <xacro:ctrl_joint name="finger_left_joint" init="0.075"/>
+    <xacro:ctrl_joint name="finger_right_joint" init="0.075"/>
+  </ros2_control>
+
+  <gazebo>
+    <plugin filename="gz_ros2_control-system" name="gz_ros2_control::GazeboSimROS2ControlPlugin">
+      <parameters>$(arg controllers_file)</parameters>
+    </plugin>
+  </gazebo>
+
+  <!--
+    Grip simulation: one DetachableJoint per box slot (held_0 .. held_N-1).
+    The plugin attaches its box the moment a model with that name appears, so the
+    pick node swaps the belt box for "held_i" at the identical pose once the fingers
+    have closed. Publishing to /gripper/detach_i releases it.
+    (Fixed joints are merged in SDF, so the parent link must be link6.)
+  -->
+  <xacro:macro name="attach_slot" params="i">
+    <gazebo>
+      <plugin filename="ignition-gazebo-detachable-joint-system" name="ignition::gazebo::systems::DetachableJoint">
+        <parent_link>link6</parent_link>
+        <child_model>held_${i}</child_model>
+        <child_link>link</child_link>
+        <detach_topic>/gripper/detach_${i}</detach_topic>
+      </plugin>
+    </gazebo>
+    <xacro:if value="${i+1 &lt; int(slots)}">
+      <xacro:attach_slot i="${i+1}"/>
+    </xacro:if>
+  </xacro:macro>
+  <xacro:attach_slot i="0"/>
+
+</robot>

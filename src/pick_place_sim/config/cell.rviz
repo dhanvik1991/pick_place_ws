@@ -1,0 +1,60 @@
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Class: rviz_default_plugins/Grid
+      Name: Grid
+      Enabled: true
+      Reference Frame: world
+    - Class: moveit_rviz_plugin/PlanningScene
+      Name: PlanningScene
+      Enabled: true
+      Move Group Namespace: ""
+      Planning Scene Topic: /monitored_planning_scene
+      Robot Description: robot_description
+      Scene Geometry:
+        Scene Alpha: 0.6
+        Show Scene Geometry: true
+      Scene Robot:
+        Show Robot Visual: true
+        Robot Alpha: 1
+    - Class: moveit_rviz_plugin/Trajectory
+      Name: Trajectory
+      Enabled: true
+      Robot Description: robot_description
+      Trajectory Topic: /display_planned_path
+      State Display Time: 0.05 s
+      Loop Animation: false
+      Show Trail: false
+    - Class: rviz_default_plugins/PoseArray
+      Name: Detections
+      Enabled: true
+      Topic:
+        Value: /boxes/detections
+      Shape: Axes
+      Axes Length: 0.1
+      Axes Radius: 0.01
+    - Class: rviz_default_plugins/Image
+      Name: Camera
+      Enabled: true
+      Topic:
+        Value: /boxes/debug_image
+  Enabled: true
+  Global Options:
+    Fixed Frame: world
+    Background Color: 48; 48; 48
+  Tools:
+    - Class: rviz_default_plugins/Interact
+    - Class: rviz_default_plugins/MoveCamera
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      Distance: 3.2
+      Focal Point: {X: -0.1, Y: -0.4, Z: 0.6}
+      Pitch: 0.55
+      Yaw: 5.3
+Window Geometry:
+  Width: 1400
+  Height: 900
