@@ -1,10 +1,85 @@
-# Conveyor pick-and-place cell (ROS 2 Humble · Gazebo Fortress · MoveIt 2 · OpenCV)
+<h1 align="center">Conveyor Pick-and-Place Cell</h1>
+
+<p align="center">
+  <b>A 6-DOF arm picks boxes off a <i>moving</i> conveyor using an overhead camera, then stacks them on a table.</b><br>
+  ROS 2 Humble · Gazebo Fortress · MoveIt 2 · OpenCV · Docker
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/ROS%202-Humble-22314E?logo=ros" alt="ROS 2 Humble">
+  <img src="https://img.shields.io/badge/Gazebo-Fortress-F58113" alt="Gazebo Fortress">
+  <img src="https://img.shields.io/badge/MoveIt-2-2E7D32" alt="MoveIt 2">
+  <img src="https://img.shields.io/badge/OpenCV-vision-5C3EE8?logo=opencv" alt="OpenCV">
+  <img src="https://img.shields.io/badge/runs%20in-Docker-2496ED?logo=docker" alt="Docker">
+</p>
+
+<p align="center">
+  <img src="docs/images/demo.gif" alt="Arm intercepting a box on the moving belt and placing it on the table" width="640">
+</p>
 
 Boxes ride a conveyor. An overhead camera finds them, and a 6-DOF arm picks each one
 **from the moving belt** and places it on a table beside it. The cycle repeats for 6 boxes.
 `mode:=stop` keeps the simpler version: stop the belt, then pick.
 
-## Run
+## Gallery
+
+| The cell in Gazebo | What the overhead camera sees |
+|:---:|:---:|
+| <img src="docs/images/hero.png" alt="Gazebo view: arm holding a box above the belt, three boxes already placed" width="420"> | <img src="docs/images/camera_detection.png" alt="Camera debug image: detected box outlined in green with its world X/Y and yaw" width="420"> |
+| Arm carrying a box off the belt; three boxes already placed on the table. | HSV threshold → contour → `minAreaRect`, projected to world X/Y with TF2. |
+
+<p align="center">
+  <img src="docs/images/rviz.png" alt="RViz: MoveIt planning scene with the planned trajectory and the attached box" width="640"><br>
+  <sub>RViz: MoveIt planning scene (belt and table as collision objects), the planned trajectory, and the held box attached to the gripper (magenta).</sub>
+</p>
+
+## Setup
+
+### Prerequisites
+
+- **Linux with a desktop session** (X11, or Wayland with XWayland). Tested on Ubuntu with an Intel Iris Xe GPU.
+- **Docker Engine + Docker Compose v2**: <https://docs.docker.com/engine/install/>.
+  Add yourself to the `docker` group so `docker` runs without `sudo`:
+  `sudo usermod -aG docker $USER`, then log out and back in.
+- **`xhost`** (lets the container open windows): `sudo apt install x11-xserver-utils`
+- About **5 GB** of free disk for the image (ROS 2 Humble desktop + MoveIt + Gazebo).
+
+You do **not** need ROS, Gazebo or MoveIt on the host. Everything runs inside the container.
+
+### 1. Clone
+
+```bash
+git clone https://github.com/dhanvik1991/pick_place_ws.git
+cd pick_place_ws
+```
+
+### 2. Match the container to your machine (one time)
+
+`docker-compose.yml` has values specific to the host. Check yours and edit them if they differ:
+
+```bash
+id -u; id -g                   # -> UID / GID build args (default 1000 / 1000)
+getent group video render      # -> the numbers under group_add (default 44 / 110)
+```
+
+- `UID`/`GID` make files the container creates in the workspace owned by you.
+- `video`/`render` plus `/dev/dri` give Gazebo GPU rendering. On an NVIDIA GPU, use the
+  NVIDIA Container Toolkit instead (`runtime: nvidia` / `gpus: all`).
+
+### 3. Build and run
+
+```bash
+./run.sh
+```
+
+The first run builds the Docker image. That takes a while, because it downloads several GB. It then runs
+`colcon build` inside the container and launches the whole cell. Gazebo opens, boxes begin
+spawning after about 8 s, and the arm starts picking. Later runs start in seconds.
+
+Stop with `Ctrl+C`, or run `./stop.sh` from another terminal. To remove the container
+completely: `docker compose down`.
+
+## Usage
 
 ```bash
 ./run.sh                 # builds the Docker image on first run, then launches everything
@@ -74,6 +149,16 @@ Typical numbers: about 8 mm interception error, box placed within 1 mm of its sl
 Every final pose is checked in Gazebo. A box that isn't on its slot is reported as MISPLACED.
 
 Other launch options: `headless:=true` (no Gazebo window), `gz_verbosity:=4` (Gazebo debug log).
+
+## Troubleshooting
+
+| Symptom | Fix |
+|---|---|
+| `Authorization required` / `could not connect to display` | Run `xhost +SI:localuser:$(id -un)` (`run.sh` does this), and check `echo $DISPLAY` is set. |
+| Gazebo is black or very slow | Check that `/dev/dri` exists and that the `group_add` numbers match `getent group video render`. |
+| `permission denied ... docker.sock` | You're not in the `docker` group yet: run `sudo usermod -aG docker $USER` and log in again. |
+| Boxes don't move, or the gripper never releases | Another ROS 2 / Gazebo instance is interfering. The container uses `ROS_DOMAIN_ID=42` and `IGN_IP=127.0.0.1`. Make sure nothing else uses them, then `./stop.sh` and rerun. |
+| Built files owned by root | The `UID`/`GID` build args don't match yours. Fix them and run `docker compose build --no-cache`. |
 
 ## Real hardware
 
